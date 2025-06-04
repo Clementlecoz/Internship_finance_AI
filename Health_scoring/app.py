@@ -1,11 +1,11 @@
 import pandas as pd
 import streamlit as st
 
-# Charger le fichier
+
 df = pd.read_csv("dataset1_complet.csv")
 df = df.sort_values(["company", "quarter"])
 
-# Fonctions
+
 def get_local_alerts(row):
     alerts = []
     for score in ["profitability", "liquidity", "solvency", "leverage_adjusted"]:
@@ -16,9 +16,9 @@ def get_local_alerts(row):
             elif local < 0.2:
                 alerts.append(f"↓ {score.title()}")
     if pd.notna(row.get("revenue_growth")):
-        if row["revenue_growth"] > 0.01:
+        if row["revenue_growth"] > 0.1:
             alerts.append("Rev ↑")
-        elif row["revenue_growth"] < -0.01:
+        elif row["revenue_growth"] < -0.1:
             alerts.append("Rev ↓")
     return ", ".join(alerts)
 
@@ -32,6 +32,57 @@ def get_global_alerts(row):
             elif global_ < 0.2:
                 alerts.append(f"Low {score.title()}")
     return ", ".join(alerts)
+
+
+
+thresholds = {
+    "score_profitability": {"low": 0.2, "high": 0.8},
+    "score_liquidity": {"low": 0.2, "high": 0.8},
+    "score_solvency": {"low": 0.2, "high": 0.8},
+    "score_leverage_adjusted": {"low": 0.2, "high": 0.8},
+    "revenue_growth": {"drop": -0.1, "boost": 0.1}
+}
+
+def get_local_status(row):
+    red, green = 0, 0
+    indicators = {
+        "score_profitability": row.get("score_profitability_local"),
+        "score_liquidity": row.get("score_liquidity_local"),
+        "score_solvency": row.get("score_solvency_local"),
+        "score_leverage_adjusted": row.get("score_leverage_adjusted_local")
+    }
+
+    for key, value in indicators.items():
+        if pd.notna(value):
+            if value < thresholds[key]["low"]:
+                red += 1
+            elif value > thresholds[key]["high"]:
+                green += 1
+
+    adj_leverage = indicators["score_leverage_adjusted"]
+    rev = row.get("revenue_growth")
+
+    if adj_leverage is not None and adj_leverage < thresholds["score_leverage_adjusted"]["low"]:
+        return "Leveraged Risk"
+    elif adj_leverage is not None and adj_leverage > thresholds["score_leverage_adjusted"]["high"] and red == 0 and rev is not None and rev > thresholds["revenue_growth"]["boost"]:
+        return "Excellent Health"
+    elif red >= 3:
+        return "Critical Risk"
+    elif red == 2:
+        return "Danger"
+    elif green >= 2 and red == 0:
+        return "Strong"
+    elif green > 0 and red == 0:
+        return "Good signal"
+    elif red == green and red > 0:
+        return "Mixed Risk"
+    elif red == 1 and green == 0:
+        return "Caution"
+    elif all(0.2 <= val <= 0.8 for val in indicators.values() if pd.notna(val)):
+        return "Stable"
+    else:
+        return "Watch"
+
 
 
 def get_status(row):
@@ -56,11 +107,10 @@ def get_status(row):
             elif global_ > 0.8:
                 global_high.add(score)
 
-    # Intersections entre local et global
+    
     common_low = local_low & global_low
     common_high = local_high & global_high
 
-    # Règles conditionnelles améliorées
     if len(common_low) >= 2:
         return "Structural Risk"
     elif "solvency" in common_low:
@@ -134,24 +184,47 @@ def style_status(status):
 
 
 
-# Ajouter colonnes Alert Summary et Status
+
 df["Local Alert Summary"] = df.apply(get_local_alerts, axis=1)
 df["Global Alert Summary"] = df.apply(get_global_alerts, axis=1)
+df["Local Status"] = df.apply(get_local_status, axis=1)
 
 df["Overall Status"] = df.apply(get_status, axis=1)
 df["Rev Growth"] = df["revenue_growth"].apply(lambda x: f"{x*100:.1f}%" if pd.notna(x) else "")
 df["Recommendation"] = df.apply(get_recommendation, axis=1)
 df["Status Display"] = df["Overall Status"].apply(style_status)
-# Interface Streamlit
+
+def color_local_status(val):
+    color = ""
+    if val == "Strong":
+        color = "background-color: #b6fcb6"  
+    elif val == "Danger":
+        color = "background-color: #ffd3d3"  
+    elif val == "Critical Risk":
+        color = "background-color: #ff9999"  
+    elif val == "Stable":
+        color = "background-color: #f7f7f7"  
+    elif val == "Good signal":
+        color = "background-color: #d1e7dd"  
+    elif val == "Caution":
+        color = "background-color: #fff3cd"  
+    elif val == "Mixed Risk":
+        color = "background-color: #ffe6cc"  
+    elif val == "Leveraged Risk":
+        color = "background-color: #f0c2c2" 
+    return color
+
+
+# streamlit
 st.title("📊 Company Financial Score Dashboard")
 
 # Menu déroulant
 company = st.selectbox("Select a company:", sorted(df["company"].unique()))
 
-# Filtrer
+# filter by comapny
 df_company = df[df["company"] == company]
 
-# Colonnes à afficher
+
 cols = {
     "score_profitability_local": "Profitability (Local)",
     "score_profitabilty_global": "Profitability (Global)",
@@ -164,9 +237,14 @@ cols = {
     "Rev Growth": "Rev Growth",
     "Local Alert Summary": "Local Alerts",
     "Global Alert Summary": "Global Alerts",
-    "Status Display": "Status Display"
+    "Status Display": "Status Display",
+    "Local Status": "Local Status"
 }
 
-# Affichage
 st.subheader(f"📈 Results for {company}")
-st.dataframe(df_company[["quarter"] + list(cols.keys())].rename(columns=cols), use_container_width=True)
+
+
+styled_df = df_company[["quarter"] + list(cols.keys())].rename(columns=cols).style.applymap(
+    color_local_status, subset=["Local Status"]
+)
+st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
