@@ -1,8 +1,22 @@
 import pandas as pd
 import streamlit as st
 
+import os
+import pandas as pd
 
-df = pd.read_csv("dataset1_complet.csv")
+# Get the absolute path of the current script (your .py file)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Construct absolute path to dataset relative to the script location
+csv_path = os.path.normpath(os.path.join(current_dir, '..', 'dataset1_complet.csv'))
+
+# Load the dataset
+df = pd.read_csv(csv_path)
+
+# Optional: print the path to confirm
+print(f"Loading dataset from: {csv_path}")
+
+#df = pd.read_csv("../dataset1_complet.csv")
 df = df.sort_values(["company", "quarter"])
 
 
@@ -182,6 +196,8 @@ def style_status(status):
         return "⚪ Neutral"
 
 
+def to_percentage(score):
+    return f"{score * 100:.0f}%" if pd.notna(score) else ""
 
 
 
@@ -191,6 +207,15 @@ df["Local Status"] = df.apply(get_local_status, axis=1)
 
 df["Overall Status"] = df.apply(get_status, axis=1)
 df["Rev Growth"] = df["revenue_growth"].apply(lambda x: f"{x*100:.1f}%" if pd.notna(x) else "")
+df["Profitability (Local %)"] = df["score_profitability_local"].apply(to_percentage)
+df["Profitability (Global %)"] = df["score_profitabilty_global"].apply(to_percentage)
+df["Liquidity (Local %)"] = df["score_liquidity_local"].apply(to_percentage)
+df["Liquidity (Global %)"] = df["score_liquidity_global"].apply(to_percentage)
+df["Solvency (Local %)"] = df["score_solvency_local"].apply(to_percentage)
+df["Solvency (Global %)"] = df["score_solvency_global"].apply(to_percentage)
+df["Adj. Leverage (Local %)"] = df["score_leverage_adjusted_local"].apply(to_percentage)
+df["Adj. Leverage (Global %)"] = df["score_leverage_adjusted_global"].apply(to_percentage)
+
 df["Recommendation"] = df.apply(get_recommendation, axis=1)
 df["Status Display"] = df["Overall Status"].apply(style_status)
 
@@ -225,26 +250,57 @@ company = st.selectbox("Select a company:", sorted(df["company"].unique()))
 df_company = df[df["company"] == company]
 
 
-cols = {
-    "score_profitability_local": "Profitability (Local)",
-    "score_profitabilty_global": "Profitability (Global)",
-    "score_liquidity_local": "Liquidity (Local)",
-    "score_liquidity_global": "Liquidity (Global)",
-    "score_solvency_local": "Solvency (Local)",
-    "score_solvency_global": "Solvency (Global)",
-    "score_leverage_adjusted_local": "Adj. Leverage (Local)",
-    "score_leverage_adjusted_global": "Adj. Leverage (Global)",
-    "Rev Growth": "Rev Growth",
-    "Local Alert Summary": "Local Alerts",
-    "Global Alert Summary": "Global Alerts",
-    "Status Display": "Status Display",
-    "Local Status": "Local Status"
-}
-
-st.subheader(f"📈 Results for {company}")
 
 
-styled_df = df_company[["quarter"] + list(cols.keys())].rename(columns=cols).style.applymap(
-    color_local_status, subset=["Local Status"]
-)
-st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
+
+# Plain language mapping
+def get_friendly_status(val):
+    if val in ["Excellent Health", "Strong", "Good signal"]:
+        return "🟢 Healthy"
+    elif val in ["Caution", "Mixed Risk", "Stable", "Watch"]:
+        return " stable"
+    elif val in ["Danger", "Critical Risk", "Leveraged Risk"]:
+        return "🔴 At Risk"
+    else:
+        return "Unknown"
+
+df_company["Overall Health"] = df_company["Local Status"].apply(get_friendly_status)
+
+# Emoji revenue trend
+def revenue_trend(row):
+    if pd.isna(row["revenue_growth"]):
+        return "N/A"
+    elif row["revenue_growth"] > 0.1:
+        return "📈 +{:.1f}%".format(row["revenue_growth"] * 100)
+    elif row["revenue_growth"] < -0.1:
+        return "📉 {:.1f}%".format(row["revenue_growth"] * 100)
+    else:
+        return "{:.1f}%".format(row["revenue_growth"] * 100)
+
+df_company["Revenue Trend"] = df_company.apply(revenue_trend, axis=1)
+
+# Simple table
+simple_cols = ["quarter", "Overall Health", "Revenue Trend", "Local Alert Summary", "Global Alert Summary","Recommendation"]
+simple_df = df_company[simple_cols].rename(columns={
+    "quarter": "Quarter",
+    "Overall Health": "Health",
+    "Revenue Trend": " Revenue",
+    "Local Alert Summary": " Local Key Alerts",
+    "Global Alert Summary": " Global Key Alerts",
+    "Recommendation": "Summary"
+})
+
+# Summary cards
+st.subheader(" Quick Summary")
+healthy_count = df_company["Overall Health"].eq("🟢 Healthy").sum()
+at_risk_count = df_company["Overall Health"].eq("🔴 At Risk").sum()
+avg_growth = df_company["revenue_growth"].mean()
+
+col1, col2 = st.columns(2)
+col1.metric("🟢 Healthy Quarters", healthy_count)
+col2.metric("🔴 At Risk Quarters", at_risk_count)
+
+
+# Render table
+st.subheader(" Simple Overview Table")
+st.dataframe(simple_df, hide_index=True)
