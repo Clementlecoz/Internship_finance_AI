@@ -1,24 +1,15 @@
 import pandas as pd
 import streamlit as st
-
-
 import os
-import pandas as pd
 
-# Get the absolute path of the current script (your .py file)
+# Reuse your dataset loading logic
 current_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Construct absolute path to dataset relative to the script location
 csv_path = os.path.normpath(os.path.join(current_dir, '..', 'dataset1_complet.csv'))
-
-# Load the dataset
 df = pd.read_csv(csv_path)
-
-# Optional: print the path to confirm
-print(f"Loading dataset from: {csv_path}")
-
-
 df = df.sort_values(["company", "quarter"])
+
+
+
 
 
 def get_local_alerts(row):
@@ -229,18 +220,30 @@ def color_local_status(val):
         color = "background-color: #f0c2c2" 
     return color
 
+# Add your existing transformations again (or modularize them)
+# Copy-paste the relevant functions from your main script:
+# - get_local_alerts, get_global_alerts, get_local_status, get_status, get_recommendation, style_status, color_local_status
+# Then apply those transformations again:
+df["Local Alert Summary"] = df.apply(get_local_alerts, axis=1)
+df["Global Alert Summary"] = df.apply(get_global_alerts, axis=1)
+df["Local Status"] = df.apply(get_local_status, axis=1)
+df["Overall Status"] = df.apply(get_status, axis=1)
+df["Rev Growth"] = df["revenue_growth"].apply(lambda x: f"{x*100:.1f}%" if pd.notna(x) else "")
+df["Recommendation"] = df.apply(get_recommendation, axis=1)
+df["Status Display"] = df["Overall Status"].apply(style_status)
 
-# streamlit
-st.title("📊 Company Financial Score Dashboard")
+# UI
+st.title("🗓️ Company Overview by Quarter")
 
-# Menu déroulant
-company = st.selectbox("Select a company:", sorted(df["company"].unique()))
+# Dropdown for quarter selection
+unique_quarters = sorted(df["quarter"].unique())
+selected_quarter = st.selectbox("Select a quarter:", unique_quarters)
 
-# filter by comapny
-df_company = df[df["company"] == company]
+# Filter and show data
+df_quarter = df[df["quarter"] == selected_quarter]
 
-
-cols = {
+cols_quarter = {
+    "company": "Company",
     "score_profitability_local": "Profitability (Local)",
     "score_profitabilty_global": "Profitability (Global)",
     "score_liquidity_local": "Liquidity (Local)",
@@ -250,19 +253,13 @@ cols = {
     "score_leverage_adjusted_local": "Adj. Leverage (Local)",
     "score_leverage_adjusted_global": "Adj. Leverage (Global)",
     "Rev Growth": "Rev Growth",
-    "Local Alert Summary": "Local Alerts",
-    "Global Alert Summary": "Global Alerts",
     "Status Display": "Status Display",
-    "Local Status": "Local Status"
+    "Local Status": "Local Status",
+    "Recommendation": "Recommendation"
 }
 
-st.subheader(f"📈 Results for {company}")
-
-
-styled_df = df_company[["quarter"] + list(cols.keys())].rename(columns=cols).style.applymap(
+styled_quarter = df_quarter[list(cols_quarter.keys())].rename(columns=cols_quarter).style.applymap(
     color_local_status, subset=["Local Status"]
 )
 
-
-st.markdown(styled_df.to_html(escape=False), unsafe_allow_html=True)
-
+st.markdown(styled_quarter.to_html(escape=False), unsafe_allow_html=True)
