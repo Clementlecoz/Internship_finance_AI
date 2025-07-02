@@ -7,7 +7,7 @@ def show_methodology_page():
 
     st.markdown("""
     This dashboard provides a financial health overview using composite scores derived from key financial indicators.  
-    Each score targets a specific financial dimension — helping simplify complex financial data into interpretable signals.
+    Each score targets a specific financial dimension -> helping simplify complex financial data into interpretable signals.
     
     ### Step 1: Key Indicators Used
 
@@ -48,7 +48,7 @@ def show_methodology_page():
     This ensures fairness across variables with different scales or units, and highlights relative performance.
     """)
 
-    # === CORRELATION MATRIX SECTION ===
+    
     st.subheader(" Step 2: Correlation Matrix – Selecting the Right Combinations")
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -175,5 +175,5 @@ def show_methodology_page():
         Together, these form a balanced and interpretable view of company health.
         """)
 
-# Call the function so Streamlit runs it and shows content
+
 show_methodology_page()

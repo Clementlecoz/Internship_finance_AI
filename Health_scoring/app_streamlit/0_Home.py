@@ -1,10 +1,9 @@
 import streamlit as st
 from PIL import Image
 
-# Page configuration
+
 st.set_page_config(page_title="Company Financial Health Dashboard", layout="wide")
 
-# --- Finance-style gradient background ---
 st.markdown(
     """
     <style>
@@ -39,11 +38,12 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- Optional logo ---
+
 logo = Image.open("Copilot_20250623_064402.png")
 st.image(logo, width=120)
 
-# --- Main content block ---
+
+
 with st.container():
     st.markdown('<div class="main-container">', unsafe_allow_html=True)
 
